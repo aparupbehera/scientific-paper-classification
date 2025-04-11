@@ -35,14 +35,25 @@ This project uses ArXiv metadata and citation information. To set up the data:
 
 1. Download the ArXiv dataset from [Kaggle](https://www.kaggle.com/datasets/Cornell-University/arxiv)
 2. Place the `arxiv-metadata-oai-snapshot.json` file in the `data/` directory
-3. Generate or obtain citation data in the format `citing_paper_id cited_paper_id` (one pair per line)
-4. Save the citation data as `arxiv-citations.txt` in the `data/` directory
 
+## Running the Project
 
-## Usage
+### Step 1: Data Processing
 
-To run the full pipeline including data preprocessing, model training, and evaluation:
+Process the data and generate embeddings:
 
 ```bash
 python main.py
 ```
+
+**Note**: This step may take significant time depending on the number of papers and your hardware. The processed data will be saved to `./data/processed/`.
+
+### Step 2: Model Training
+
+Train the selected models:
+
+```bash
+python train.py
+```
+
+Results will be saved to `./output/`.
