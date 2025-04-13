@@ -57,8 +57,12 @@ def main():
     logger.info("Extracting primary categories...")
     category_counts = data_loader.extract_primary_categories()
 
-    logger.info(f"Loading citations from {config.CITATION_FILE}...")
-    citation_graph = data_loader.load_citations(config.CITATION_FILE)
+    if config.USE_OGB_CITATIONS:
+        logger.info("Using OGB citation network...")
+        citation_graph = data_loader.load_citations()
+    else:
+        logger.info(f"Loading citations from {config.CITATION_FILE}...")
+        citation_graph = data_loader.load_citations(config.CITATION_FILE)
 
     # Print basic statistics
     logger.info(f"Loaded {len(papers_df)} papers across {len(category_counts)} categories")

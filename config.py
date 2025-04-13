@@ -7,7 +7,10 @@ DATA_DIR = './data'
 METADATA_FILE = 'arxiv-metadata-oai-snapshot.json'
 CITATION_FILE = 'arxiv-citations.txt'
 CATEGORIES = None  # List of categories or None for all
-MAX_PAPERS = 2000  # Number of papers to process
+MAX_PAPERS = 5000  # Number of papers to process
+
+USE_OGB_CITATIONS = True  # Toggle to use OGB citation network
+OGB_DATASET = 'ogbn-arxiv'  # OGB dataset name
 
 # Output configuration
 OUTPUT_DIR = './output'
@@ -30,7 +33,7 @@ TEMPORAL_SPLIT = False
 TRAIN_END_YEAR = 2017
 
 # Training configuration
-MODELS_TO_TRAIN = ['text']
+MODELS_TO_TRAIN = ['text', 'graph', 'hybrid']
 HIDDEN_DIM = 256
 NUM_LAYERS = 2
 DROPOUT = 0.5

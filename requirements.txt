@@ -21,3 +21,6 @@ ogb>=1.3.3
 
 # Optional
 dgl>=0.7.0  # For DGL support
+
+ogb>=1.3.6
+torch-geometric>=2.3.0

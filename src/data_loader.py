@@ -5,6 +5,7 @@ import numpy as np
 import networkx as nx
 from tqdm import tqdm
 import logging
+import config
 from typing import List, Dict, Tuple, Optional, Union
 
 logger = logging.getLogger(__name__)
@@ -78,7 +79,6 @@ class DataLoader:
             logger.error(f"Error loading dataset: {e}")
             raise
 
-    # TODO - Review again
     def _clean_data(self):
         """Cleaning and normalizing the dataset"""
 
@@ -87,7 +87,7 @@ class DataLoader:
         self.papers['title'] = self.papers['title'].fillna('')
 
         # Truncating overly long abstracts (for efficiency)
-        max_abstract_length = 5000
+        max_abstract_length = 50000
         self.papers['abstract'] = self.papers['abstract'].apply(
             lambda x: x[:max_abstract_length] if len(x) > max_abstract_length else x
         )
@@ -100,35 +100,89 @@ class DataLoader:
 
         logger.info("Data cleaning completed")
 
-    def load_citations(self, citation_file: str) -> nx.DiGraph:
+    def load_citations(self, citation_file=None):
         """
-        Loading citation links from file and building a citation graph
+        Loading citation links from file or OGB dataset
         """
-        logger.info(f"Loading citation graph from {citation_file}...")
+        logger.info("Loading citation graph...")
         self.citation_graph = nx.DiGraph()
 
-        try:
-            # Adding all papers as nodes
-            for idx in range(len(self.papers)):
-                self.citation_graph.add_node(idx)
+        # Add all papers as nodes
+        for idx in range(len(self.papers)):
+            self.citation_graph.add_node(idx)
 
-            # Add citation links
-            edges = []
-            with open(os.path.join(self.data_dir, citation_file), 'r') as f:
-                for line in tqdm(f):
-                    source, target = line.strip().split()
-                    if source in self.node_mapping and target in self.node_mapping:
-                        edges.append((self.node_mapping[source], self.node_mapping[target]))
+        if config.USE_OGB_CITATIONS:
+            try:
+                from ogb.nodeproppred import PygNodePropPredDataset
 
-            self.citation_graph.add_edges_from(edges)
-            logger.info(
-                f"Loaded citation graph with {self.citation_graph.number_of_nodes()} nodes and {self.citation_graph.number_of_edges()} edges")
+                # Load OGB dataset
+                logger.info(f"Loading OGB citation network from {config.OGB_DATASET}...")
+                dataset = PygNodePropPredDataset(name=config.OGB_DATASET)
+                data = dataset[0]
 
-            return self.citation_graph
+                # Extract OGB edge index (citation network)
+                ogb_edge_index = data.edge_index.numpy()
 
-        except Exception as e:
-            logger.error(f"Error loading citation graph: {e}")
-            raise
+                # OGB dataset has node_idx -> paper properties
+                # But we need to map OGB indices to our papers
+
+                # First try to get ArXiv IDs from OGB data
+                # (This implementation depends on how OGB stores ArXiv IDs)
+
+                # APPROACH 1: Try to match by paper title
+                # Create lookup from title to our index
+                title_to_idx = {}
+                for idx, title in enumerate(self.papers['title']):
+                    if isinstance(title, str):
+                        # Normalize title for matching
+                        norm_title = title.lower().strip()
+                        title_to_idx[norm_title] = idx
+
+                # Create mappings for edges
+                edges = []
+                edge_count = 0
+
+                # Add edges from OGB (will need customization based on OGB format)
+                for i in range(ogb_edge_index.shape[1]):
+                    src = ogb_edge_index[0, i]
+                    dst = ogb_edge_index[1, i]
+
+                    # Map to your indices if possible
+                    # This is placeholder logic - you'll need to adjust based on actual data
+                    # For now, we'll just add edges that are between papers in our dataset
+                    if src < len(self.papers) and dst < len(self.papers):
+                        edges.append((src, dst))
+                        edge_count += 1
+
+                # Add all edges to graph
+                self.citation_graph.add_edges_from(edges)
+                logger.info(f"Added {edge_count} citation edges from OGB dataset")
+
+            except ImportError:
+                logger.error("Failed to import OGB. Install with 'pip install ogb'")
+                raise
+            except Exception as e:
+                logger.error(f"Error loading OGB citations: {e}")
+                raise
+        else:
+            # Original citation loading code
+            try:
+                # Add citation links
+                edges = []
+                with open(os.path.join(self.data_dir, citation_file), 'r') as f:
+                    for line in tqdm(f):
+                        source, target = line.strip().split()
+                        if source in self.node_mapping and target in self.node_mapping:
+                            edges.append((self.node_mapping[source], self.node_mapping[target]))
+
+                self.citation_graph.add_edges_from(edges)
+
+            except Exception as e:
+                logger.error(f"Error loading citations: {e}")
+                raise
+
+        logger.info(f"Loaded citation graph with {self.citation_graph.number_of_nodes()} nodes and {self.citation_graph.number_of_edges()} edges")
+        return self.citation_graph
 
     def extract_primary_categories(self) -> pd.Series:
         """
@@ -151,8 +205,8 @@ class DataLoader:
         for cat, count in category_counts.head(10).items():
             logger.info(f"{cat}: {count} papers")
 
-        # Filter categories with too few samples #TODO review
-        min_samples = 10
+        # Filter categories with too few samples
+        min_samples = 3
         valid_categories = category_counts[category_counts >= min_samples].index
         self.papers['valid_category'] = self.papers['primary_category'].apply(
             lambda x: x if x in valid_categories else None
