@@ -14,7 +14,7 @@ class GraphEmbeddings:
     Class for generating embeddings from graph structure
     """
 
-    def __init__(self, graph: nx.Graph, embedding_dim: int = 128, cache_dir: str = './embeddings'):
+    def __init__(self, graph: nx.Graph, embedding_dim: int = 256, cache_dir: str = './embeddings'):
         """
         Initialize the graph embeddings generator
         """
@@ -26,12 +26,12 @@ class GraphEmbeddings:
         os.makedirs(cache_dir, exist_ok=True)
 
     def generate_node2vec_embeddings(self,
-                                     dimensions: int = 128,
-                                     walk_length: int = 80,
-                                     num_walks: int = 10,
+                                     dimensions: int = 256,
+                                     walk_length: int = 100,
+                                     num_walks: int = 20,
                                      workers: int = 4,
-                                     p: float = 1.0,
-                                     q: float = 1.0,
+                                     p: float = 0.25,
+                                     q: float = 0.25,
                                      use_cache: bool = True,
                                      cache_file: str = "node2vec_embeddings.pt") -> torch.Tensor:
         """
@@ -100,9 +100,9 @@ class GraphEmbeddings:
             raise
 
     def generate_deep_walk_embeddings(self,
-                                      dimensions: int = 128,
-                                      walk_length: int = 80,
-                                      num_walks: int = 10,
+                                      dimensions: int = 256,
+                                      walk_length: int = 100,
+                                      num_walks: int = 20,
                                       workers: int = 4,
                                       use_cache: bool = True,
                                       cache_file: str = "deepwalk_embeddings.pt") -> torch.Tensor:
@@ -114,8 +114,8 @@ class GraphEmbeddings:
             walk_length=walk_length,
             num_walks=num_walks,
             workers=workers,
-            p=1.0,
-            q=1.0,
+            p=0.25,
+            q=0.25,
             use_cache=use_cache,
             cache_file=cache_file
         )
