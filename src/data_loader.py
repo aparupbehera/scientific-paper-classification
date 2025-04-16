@@ -64,6 +64,13 @@ class DataLoader:
             # Converts to DataFrame
             self.papers = pd.DataFrame(papers)
 
+            logger.info("Filtering to computer science papers only...")
+            original_count = len(self.papers)
+
+            # Keep only papers with a CS category (starts with 'cs.')
+            self.papers = self.papers[self.papers['categories'].str.contains('cs\.', regex=True, na=False)]
+            logger.info(f"Filtered from {original_count} to {len(self.papers)} CS papers")
+
             # Creates mapping from original IDs to consecutive indices
             for idx, paper_id in enumerate(self.papers['paper_id']):
                 self.node_mapping[paper_id] = idx
@@ -102,7 +109,7 @@ class DataLoader:
 
     def load_citations(self, citation_file=None):
         """
-        Loading citation links from file or OGB dataset
+        Load citation links from file or OGB dataset and build a citation graph.
         """
         logger.info("Loading citation graph...")
         self.citation_graph = nx.DiGraph()
@@ -111,9 +118,12 @@ class DataLoader:
         for idx in range(len(self.papers)):
             self.citation_graph.add_node(idx)
 
+        logger.info(f"Added {len(self.papers)} nodes to citation graph")
+
         if config.USE_OGB_CITATIONS:
             try:
                 from ogb.nodeproppred import PygNodePropPredDataset
+                import torch
 
                 # Load OGB dataset
                 logger.info(f"Loading OGB citation network from {config.OGB_DATASET}...")
@@ -122,41 +132,43 @@ class DataLoader:
 
                 # Extract OGB edge index (citation network)
                 ogb_edge_index = data.edge_index.numpy()
+                logger.info(f"OGB citation network has {ogb_edge_index.shape[1]} edges")
 
-                # OGB dataset has node_idx -> paper properties
-                # But we need to map OGB indices to our papers
+                # Since our papers are filtered to CS-only and ogbn-arxiv contains CS papers,
+                # we can use a direct index mapping (assuming papers are in similar order)
+                max_idx = min(len(self.papers), ogb_edge_index.max().item() + 1)
 
-                # First try to get ArXiv IDs from OGB data
-                # (This implementation depends on how OGB stores ArXiv IDs)
-
-                # APPROACH 1: Try to match by paper title
-                # Create lookup from title to our index
-                title_to_idx = {}
-                for idx, title in enumerate(self.papers['title']):
-                    if isinstance(title, str):
-                        # Normalize title for matching
-                        norm_title = title.lower().strip()
-                        title_to_idx[norm_title] = idx
-
-                # Create mappings for edges
+                # Extract edges that are within our dataset size
                 edges = []
-                edge_count = 0
-
-                # Add edges from OGB (will need customization based on OGB format)
                 for i in range(ogb_edge_index.shape[1]):
-                    src = ogb_edge_index[0, i]
-                    dst = ogb_edge_index[1, i]
-
-                    # Map to your indices if possible
-                    # This is placeholder logic - you'll need to adjust based on actual data
-                    # For now, we'll just add edges that are between papers in our dataset
-                    if src < len(self.papers) and dst < len(self.papers):
+                    src, dst = int(ogb_edge_index[0, i]), int(ogb_edge_index[1, i])
+                    if src < max_idx and dst < max_idx:
                         edges.append((src, dst))
-                        edge_count += 1
 
-                # Add all edges to graph
+                # Add edges to the graph
                 self.citation_graph.add_edges_from(edges)
-                logger.info(f"Added {edge_count} citation edges from OGB dataset")
+                logger.info(f"Added {len(edges)} citation edges from OGB dataset")
+
+                # Check if the graph is too sparse (which could indicate a mapping issue)
+                if len(edges) < len(self.papers) * 0.5:
+                    logger.warning(
+                        f"Citation graph is sparse with {len(edges)} edges for {len(self.papers)} papers. "
+                        f"This may impact graph model performance."
+                    )
+
+                # Log degree statistics to help with debugging
+                in_degrees = [d for _, d in self.citation_graph.in_degree()]
+                out_degrees = [d for _, d in self.citation_graph.out_degree()]
+
+                if in_degrees:
+                    logger.info(f"Citation in-degree stats: min={min(in_degrees)}, "
+                                f"max={max(in_degrees)}, "
+                                f"mean={sum(in_degrees) / len(in_degrees):.2f}")
+
+                if out_degrees:
+                    logger.info(f"Citation out-degree stats: min={min(out_degrees)}, "
+                                f"max={max(out_degrees)}, "
+                                f"mean={sum(out_degrees) / len(out_degrees):.2f}")
 
             except ImportError:
                 logger.error("Failed to import OGB. Install with 'pip install ogb'")
@@ -165,7 +177,7 @@ class DataLoader:
                 logger.error(f"Error loading OGB citations: {e}")
                 raise
         else:
-            # Original citation loading code
+            # Original citation loading code for custom citation file
             try:
                 # Add citation links
                 edges = []
@@ -176,12 +188,15 @@ class DataLoader:
                             edges.append((self.node_mapping[source], self.node_mapping[target]))
 
                 self.citation_graph.add_edges_from(edges)
+                logger.info(f"Added {len(edges)} citation edges from citation file")
 
             except Exception as e:
                 logger.error(f"Error loading citations: {e}")
                 raise
 
-        logger.info(f"Loaded citation graph with {self.citation_graph.number_of_nodes()} nodes and {self.citation_graph.number_of_edges()} edges")
+        logger.info(f"Final citation graph has {self.citation_graph.number_of_nodes()} nodes and "
+                    f"{self.citation_graph.number_of_edges()} edges")
+
         return self.citation_graph
 
     def extract_primary_categories(self) -> pd.Series:
@@ -204,6 +219,9 @@ class DataLoader:
         logger.info("\nCategory Distribution (top 10):")
         for cat, count in category_counts.head(10).items():
             logger.info(f"{cat}: {count} papers")
+
+        cs_categories = [cat for cat in category_counts.index if cat.startswith('cs.')]
+        logger.info(f"Found {len(cs_categories)} CS subcategories out of {len(category_counts)} total categories")
 
         # Filter categories with too few samples
         min_samples = 3

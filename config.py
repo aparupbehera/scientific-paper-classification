@@ -9,7 +9,7 @@ CITATION_FILE = 'arxiv-citations.txt'
 CATEGORIES = None  # List of categories or None for all
 MAX_PAPERS = 5000  # Number of papers to process
 
-USE_OGB_CITATIONS = True  # Toggle to use OGB citation network
+USE_OGB_CITATIONS = False  # Backup citation graph, use local for now
 OGB_DATASET = 'ogbn-arxiv'  # OGB dataset name
 
 # Output configuration
@@ -37,8 +37,8 @@ MODELS_TO_TRAIN = ['text', 'graph', 'hybrid']
 HIDDEN_DIM = 256
 NUM_LAYERS = 2
 DROPOUT = 0.5
-GNN_TYPE = 'gcn'  # Options: 'gcn', 'gat', 'sage'
-COMBINATION = 'concatenate'  # Options: 'concatenate', 'add', 'gate'
+GNN_TYPE = 'gat'  # Options: 'gcn', 'gat', 'sage'
+COMBINATION = 'cross_attention'  # Options: 'cross_attention', 'weighted', 'gate'
 EPOCHS = 100
 LEARNING_RATE = 0.001
 WEIGHT_DECAY = 5e-4
